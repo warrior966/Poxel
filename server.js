@@ -3,7 +3,7 @@ const { createProxyMiddleware, responseInterceptor } = require('http-proxy-middl
 const { translate } = require('@vitalets/google-translate-api'); // Requiere: npm install @vitalets/google-translate-api
 
 const app = express();
-const TARGET_URL = 'https://poxel.io'; // La web del juego original
+const TARGET_URL = 'https://youtube.com'; // La web del juego original
 
 // Función auxiliar para traducir textos dinámicos en archivos JSON o configuraciones
 async function translateJSONContent(jsonBuffer) {
