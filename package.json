@@ -1,7 +1,6 @@
 {
   "name": "poxel-proxy-final",
   "version": "1.0.0",
-  "description": "Proxy sigiloso para Poxel",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
