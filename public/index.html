@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visor Protegido con Nombres</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; background: #1a1a1a; color: #eee; margin: 0; height: 100vh; overflow: hidden; }
+        #header-ui { width: 100%; transition: margin-top 0.5s ease-in-out; z-index: 10; }
+        .barra-navegacion { background: #2d2d2d; padding: 15px; display: flex; justify-content: center; gap: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+        
+        /* Ajuste de tamaños para que quepan los 3 inputs */
+        input { width: 18%; padding: 10px 15px; border-radius: 5px; border: 1px solid #444; background: #3d3d3d; color: white; outline: none; }
+        
+        .btn { padding: 10px 15px; border-radius: 5px; border: none; cursor: pointer; font-weight: bold; transition: 0.2s; display: flex; align-items: center; gap: 5px; }
+        .btn-ir { background: #4285f4; color: white; }
+        .btn-ir:hover { background: #357ae8; }
+        .btn-ocultar { background: #5f6368; color: white; }
+        .btn-emergencia { background: #ea4335; color: white; display: none; }
+        #btn-mostrar { position: fixed; top: 10px; right: 10px; background: rgba(66, 133, 244, 0.8); color: white; border-radius: 50%; width: 40px; height: 40px; display: none; justify-content: center; align-items: center; cursor: pointer; z-index: 100; border: none; font-size: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.5); }
+        #visor { width: 100%; flex-grow: 1; border: none; background: white; }
+        .oculto { margin-top: -85px; }
+
+        /* Panel Admin */
+        #panel-admin { display: none; position: fixed; top: 15%; background: #252526; border: 2px solid #4285f4; border-radius: 8px; padding: 20px; width: 380px; box-shadow: 0 10px 25px rgba(0,0,0,0.7); z-index: 200; }
+        #panel-admin h3 { margin-top: 0; color: #4285f4; border-bottom: 1px solid #444; padding-bottom: 10px; }
+        .btn-panic-global { background: #d93025; color: white; border: none; padding: 12px; width: 100%; border-radius: 5px; font-weight: bold; cursor: pointer; margin-bottom: 15px; font-size: 14px; transition: 0.2s; }
+        .btn-panic-global:hover { background: #a51d14; }
+        .lista-usuarios { list-style: none; padding: 0; margin: 15px 0; max-height: 180px; overflow-y: auto; }
+        .usuario-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; background: #333; margin-bottom: 5px; border-radius: 4px; font-size: 13px; }
+        .btn-kick { background: #ea4335; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; }
+        .btn-kick:hover { background: #c53929; }
+        .btn-cerrar-admin { background: #5f6368; color: white; border: none; padding: 8px; width: 100%; border-radius: 4px; cursor: pointer; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <button id="btn-mostrar" onclick="alternarUI(true)" title="Mostrar controles">👁</button>
+
+    <div id="header-ui">
+        <div class="barra-navegacion">
+            <input type="text" id="urlInput" placeholder="Escribe la web...">
+            <!-- NUEVO: Input para elegir el nombre -->
+            <input type="text" id="userInput" placeholder="Tu Nombre/Apodo...">
+            <input type="password" id="passInput" placeholder="Contraseña...">
+            
+            <button class="btn btn-ir" onclick="validarYCargar()">Cargar</button>
+            <button id="btnExtra" class="btn btn-emergencia" onclick="abrirFuera()">Abrir fuera ↗</button>
+            <button class="btn btn-ocultar" onclick="alternarUI(false)">Ocultar controles</button>
+        </div>
+    </div>
+
+    <div id="panel-admin">
+        <h3>Panel Real-Time Admin</h3>
+        <button class="btn-panic-global" onclick="cerrarWebGlobal()">🚨 Cerrar Web para Todos</button>
+        <p>Dispositivos en línea:</p>
+        <ul class="lista-usuarios" id="listaUsuarios"></ul>
+        <button class="btn-cerrar-admin" onclick="cerrarPanelAdmin()">Cerrar Panel</button>
+    </div>
+
+    <iframe id="visor" src="about:blank" allow="autoplay; fullscreen" allowfullscreen></iframe>
+
+    <script>
+        let socket; // Se iniciará cuando pongan la contraseña
+
+        const CONTRASEÑA_USUARIO = "1234";
+        const CONTRASEÑA_ADMIN = "admin";
+
+        function limpiarURL(url) {
+            url = url.trim();
+            if (url === "") return "";
+            if (!url.startsWith('http')) { url = 'https://' + url; }
+            return url;
+        }
+
+        function conectarServidor(nombreElegido) {
+            // Si ya existía una conexión, la cerramos antes de abrir una nueva
+            if (socket) socket.disconnect();
+
+            // Pasamos el nombre elegido directamente al servidor al conectar
+            socket = io({
+                query: { nombre: nombreElegido }
+            });
+
+            // Configurar los escuchadores del socket una vez conectado
+            socket.on('actualizar_usuarios', (usuarios) => {
+                const lista = document.getElementById('listaUsuarios');
+                lista.innerHTML = "";
+                const otrosUsuarios = usuarios.filter(u => u.id !== socket.id);
+
+                if (otrosUsuarios.length === 0) {
+                    lista.innerHTML = "<li class='usuario-item'>No hay otros usuarios en línea</li>";
+                    return;
+                }
+
+                otrosUsuarios.forEach(user => {
+                    const li = document.createElement('li');
+                    li.className = "usuario-item";
+                    li.innerHTML = `
+                        <span>👤 <strong>${user.nombre}</strong> (${user.ip})</span>
+                        <button class="btn-kick" onclick="expulsarDelServidor('${user.id}')">Echar</button>
+                    `;
+                    lista.appendChild(li);
+                });
+            });
+
+            socket.on('orden_expulsion', () => {
+                document.getElementById('visor').src = "about:blank";
+                document.body.innerHTML = `
+                    <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; background:#111; color:#ea4335; text-align:center; padding:20px;">
+                        <h1 style="font-size:32px;">❌ ACCESO TERMINADO</h1>
+                        <p style="color:#aaa; font-size:18px;">El administrador ha cerrado la plataforma globalmente.</p>
+                    </div>
+                `;
+            });
+        }
+
+        function validarYCargar() {
+            const passInput = document.getElementById('passInput').value;
+            let nombreElegido = document.getElementById('userInput').value.trim();
+
+            // Si el usuario no escribe nombre, se le asigna uno automático
+            if (nombreElegido === "") {
+                nombreElegido = "Usuario_" + Math.floor(100 + Math.random() * 900);
+                document.getElementById('userInput').value = nombreElegido;
+            }
+
+            if (passInput === CONTRASEÑA_ADMIN) {
+                conectarServidor(nombreElegido + " (Admin)");
+                setTimeout(() => { abrirPanelAdmin(); }, 500); // Pequeña espera para conectar
+                document.getElementById('passInput').value = ""; 
+            } else if (passInput === CONTRASEÑA_USUARIO) {
+                conectarServidor(nombreElegido);
+                cargarWeb();
+                document.getElementById('passInput').value = ""; 
+            } else {
+                alert("Contraseña incorrecta. Acceso denegado.");
+            }
+        }
+
+        function cargarWeb() {
+            let url = limpiarURL(document.getElementById('urlInput').value);
+            if (url === "") return;
+            document.getElementById('visor').src = url;
+            document.getElementById('btnExtra').style.display = "flex";
+            setTimeout(() => { alternarUI(false); }, 2000);
+        }
+
+        function abrirPanelAdmin() {
+            document.getElementById('panel-admin').style.display = "block";
+            if(socket) socket.emit('solicitar_lista');
+        }
+
+        function cerrarPanelAdmin() {
+            document.getElementById('panel-admin').style.display = "none";
+        }
+
+        function expulsarDelServidor(id) {
+            if(socket) socket.emit('expulsar_usuario', id);
+        }
+
+        function cerrarWebGlobal() {
+            if(socket) socket.emit('cerrar_web_global');
+        }
+
+        function alternarUI(mostrar) {
+            const header = document.getElementById('header-ui');
+            const btnMostrar = document.getElementById('btn-mostrar');
+            if (mostrar) {
+                header.classList.remove('oculto');
+                btnMostrar.style.display = "none";
+            } else {
+                header.classList.add('oculto');
+                btnMostrar.style.display = "flex";
+            }
+        }
+
+        function abrirFuera() {
+            let url = limpiarURL(document.getElementById('urlInput').value);
+            if (url !== "") window.open(url, '_blank');
+        }
+
+        document.getElementById('passInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') { validarYCargar(); }
+        });
+    </script>
+</body>
+</html>
+
+
