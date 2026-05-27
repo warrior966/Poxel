@@ -1,33 +1,59 @@
 const express = require('express');
-const puppeteer = require('puppeteer-extra');
-const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-
-puppeteer.use(StealthPlugin());
+const http = require('http');
+const { Server } = require('socket.io');
+const path = require('path');
 
 const app = express();
-const TARGET_URL = 'https://poxel.io';
+const server = http.createServer(app);
+const io = new Server(server);
 
-app.get('*', async (req, res) => {
-    let browser = null;
-    try {
-        browser = await puppeteer.launch({
-            headless: "new",
-            executablePath: '/usr/bin/google-chrome', // Ruta estándar en la imagen de Docker
-            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--single-process']
-        });
+app.use(express.static(path.join(__dirname, 'public')));
 
-        const page = await browser.newPage();
-        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+let usuariosActivos = {};
 
-        await page.goto(TARGET_URL + req.url, { waitUntil: 'networkidle2', timeout: 60000 });
+io.on('connection', (socket) => {
+    const usuarioId = socket.id;
+    // Captura el nombre enviado desde el cliente, si no hay, pone uno por defecto
+    const nombreUsuario = socket.handshake.query.nombre || "InvitadoAnónimo";
+    const ipUsuario = socket.handshake.address === '::1' ? '127.0.0.1' : socket.handshake.address;
 
-        const content = await page.content();
-        await browser.close();
-        res.send(content);
-    } catch (error) {
-        if (browser) await browser.close();
-        res.status(500).send("Error: " + error.message);
-    }
+    usuariosActivos[usuarioId] = {
+        id: usuarioId,
+        nombre: nombreUsuario,
+        ip: ipUsuario
+    };
+
+    console.log(`🟢 ${nombreUsuario} se ha conectado.`);
+    io.emit('actualizar_usuarios', Object.values(usuariosActivos));
+
+    socket.on('solicitar_lista', () => {
+        socket.emit('actualizar_usuarios', Object.values(usuariosActivos));
+    });
+
+    socket.on('expulsar_usuario', (idAExpulsar) => {
+        if (usuariosActivos[idAExpulsar]) {
+            console.log(`❌ Expulsando individualmente a: ${usuariosActivos[idAExpulsar].nombre}`);
+            io.to(idAExpulsar).emit('orden_expulsion');
+        }
+    });
+
+    socket.on('cerrar_web_global', () => {
+        console.log(`🚨 EL ADMINISTRADOR HA CERRADO LA WEB PARA TODOS.`);
+        socket.broadcast.emit('orden_expulsion');
+    });
+
+    socket.on('disconnect', () => {
+        if (usuariosActivos[usuarioId]) {
+            console.log(`🔴 ${usuariosActivos[usuarioId].nombre} se ha desconectado.`);
+            delete usuariosActivos[usuarioId];
+            io.emit('actualizar_usuarios', Object.values(usuariosActivos));
+        }
+    });
 });
 
-app.listen(process.env.PORT || 10000);
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+    console.log(`🚀 Servidor en ejecución en http://localhost:${PORT}`);
+});
+
+
