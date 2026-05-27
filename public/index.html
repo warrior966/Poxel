@@ -4,13 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Visor Protegido con Nombres</title>
+    <!-- Librería para conectar en tiempo real con el servidor de Render -->
     <script src="/socket.io/socket.io.js"></script>
     <style>
         body { font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; background: #1a1a1a; color: #eee; margin: 0; height: 100vh; overflow: hidden; }
         #header-ui { width: 100%; transition: margin-top 0.5s ease-in-out; z-index: 10; }
         .barra-navegacion { background: #2d2d2d; padding: 15px; display: flex; justify-content: center; gap: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
         
-        /* Ajuste de tamaños para que quepan los 3 inputs */
+        /* Ajuste de tamaño para los 3 campos de texto */
         input { width: 18%; padding: 10px 15px; border-radius: 5px; border: 1px solid #444; background: #3d3d3d; color: white; outline: none; }
         
         .btn { padding: 10px 15px; border-radius: 5px; border: none; cursor: pointer; font-weight: bold; transition: 0.2s; display: flex; align-items: center; gap: 5px; }
@@ -25,8 +26,11 @@
         /* Panel Admin */
         #panel-admin { display: none; position: fixed; top: 15%; background: #252526; border: 2px solid #4285f4; border-radius: 8px; padding: 20px; width: 380px; box-shadow: 0 10px 25px rgba(0,0,0,0.7); z-index: 200; }
         #panel-admin h3 { margin-top: 0; color: #4285f4; border-bottom: 1px solid #444; padding-bottom: 10px; }
+        
+        /* Botón de pánico masivo */
         .btn-panic-global { background: #d93025; color: white; border: none; padding: 12px; width: 100%; border-radius: 5px; font-weight: bold; cursor: pointer; margin-bottom: 15px; font-size: 14px; transition: 0.2s; }
         .btn-panic-global:hover { background: #a51d14; }
+        
         .lista-usuarios { list-style: none; padding: 0; margin: 15px 0; max-height: 180px; overflow-y: auto; }
         .usuario-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; background: #333; margin-bottom: 5px; border-radius: 4px; font-size: 13px; }
         .btn-kick { background: #ea4335; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; }
@@ -41,7 +45,6 @@
     <div id="header-ui">
         <div class="barra-navegacion">
             <input type="text" id="urlInput" placeholder="Escribe la web...">
-            <!-- NUEVO: Input para elegir el nombre -->
             <input type="text" id="userInput" placeholder="Tu Nombre/Apodo...">
             <input type="password" id="passInput" placeholder="Contraseña...">
             
@@ -51,6 +54,7 @@
         </div>
     </div>
 
+    <!-- Panel de control flotante para el Admin -->
     <div id="panel-admin">
         <h3>Panel Real-Time Admin</h3>
         <button class="btn-panic-global" onclick="cerrarWebGlobal()">🚨 Cerrar Web para Todos</button>
@@ -62,8 +66,9 @@
     <iframe id="visor" src="about:blank" allow="autoplay; fullscreen" allowfullscreen></iframe>
 
     <script>
-        let socket; // Se iniciará cuando pongan la contraseña
+        let socket; 
 
+        // CONFIGURACIÓN DE CONTRASEÑAS (Cámbialas si quieres)
         const CONTRASEÑA_USUARIO = "1234";
         const CONTRASEÑA_ADMIN = "admin";
 
@@ -74,19 +79,22 @@
             return url;
         }
 
+        // Función que conecta con el backend de Render de forma segura
         function conectarServidor(nombreElegido) {
-            // Si ya existía una conexión, la cerramos antes de abrir una nueva
             if (socket) socket.disconnect();
 
-            // Pasamos el nombre elegido directamente al servidor al conectar
+            // Configuración optimizada para servidores en la nube (Render)
             socket = io({
-                query: { nombre: nombreElegido }
+                query: { nombre: nombreElegido },
+                transports: ['websocket', 'polling'] 
             });
 
-            // Configurar los escuchadores del socket una vez conectado
+            // Escuchar la lista actualizada enviada por el servidor
             socket.on('actualizar_usuarios', (usuarios) => {
                 const lista = document.getElementById('listaUsuarios');
                 lista.innerHTML = "";
+                
+                // Ocultar al admin de su propia lista de expulsión
                 const otrosUsuarios = usuarios.filter(u => u.id !== socket.id);
 
                 if (otrosUsuarios.length === 0) {
@@ -105,12 +113,13 @@
                 });
             });
 
+            // Pantalla de bloqueo instantánea si eres expulsado
             socket.on('orden_expulsion', () => {
                 document.getElementById('visor').src = "about:blank";
                 document.body.innerHTML = `
                     <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; background:#111; color:#ea4335; text-align:center; padding:20px;">
-                        <h1 style="font-size:32px;">❌ ACCESO TERMINADO</h1>
-                        <p style="color:#aaa; font-size:18px;">El administrador ha cerrado la plataforma globalmente.</p>
+                        <h1 style="font-size:32px; font-family:'Segoe UI', sans-serif;">❌ ACCESO TERMINADO</h1>
+                        <p style="color:#aaa; font-size:18px; font-family:'Segoe UI', sans-serif;">El administrador ha cerrado la plataforma globalmente.</p>
                     </div>
                 `;
             });
@@ -120,7 +129,7 @@
             const passInput = document.getElementById('passInput').value;
             let nombreElegido = document.getElementById('userInput').value.trim();
 
-            // Si el usuario no escribe nombre, se le asigna uno automático
+            // Si el usuario no escribe un nombre, genera uno aleatorio
             if (nombreElegido === "") {
                 nombreElegido = "Usuario_" + Math.floor(100 + Math.random() * 900);
                 document.getElementById('userInput').value = nombreElegido;
@@ -128,7 +137,7 @@
 
             if (passInput === CONTRASEÑA_ADMIN) {
                 conectarServidor(nombreElegido + " (Admin)");
-                setTimeout(() => { abrirPanelAdmin(); }, 500); // Pequeña espera para conectar
+                setTimeout(() => { abrirPanelAdmin(); }, 500); 
                 document.getElementById('passInput').value = ""; 
             } else if (passInput === CONTRASEÑA_USUARIO) {
                 conectarServidor(nombreElegido);
