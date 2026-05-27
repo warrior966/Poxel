@@ -9,13 +9,21 @@ const io = new Server(server);
 
 app.use(express.static(path.join(__dirname, 'public')));
 
+// ESTADO GLOBAL: Controla si la web está cerrada o abierta
+let webBloqueada = false;
 let usuariosActivos = {};
 
 io.on('connection', (socket) => {
     const usuarioId = socket.id;
-    // Captura el nombre enviado desde el cliente, si no hay, pone uno por defecto
     const nombreUsuario = socket.handshake.query.nombre || "InvitadoAnónimo";
     const ipUsuario = socket.handshake.address === '::1' ? '127.0.0.1' : socket.handshake.address;
+
+    // SI LA WEB ESTÁ BLOQUEADA: Expulsar inmediatamente a cualquier usuario no-admin
+    if (webBloqueada && !nombreUsuario.includes("(Admin)")) {
+        socket.emit('orden_expulsion');
+        socket.disconnect();
+        return;
+    }
 
     usuariosActivos[usuarioId] = {
         id: usuarioId,
@@ -26,10 +34,16 @@ io.on('connection', (socket) => {
     console.log(`🟢 ${nombreUsuario} se ha conectado.`);
     io.emit('actualizar_usuarios', Object.values(usuariosActivos));
 
+    // Si el usuario entra y la web ya estaba bloqueada, le mandamos el aviso
+    if (webBloqueada) {
+        socket.emit('orden_expulsion');
+    }
+
     socket.on('solicitar_lista', () => {
         socket.emit('actualizar_usuarios', Object.values(usuariosActivos));
     });
 
+    // 1. Expulsar a un usuario individual
     socket.on('expulsar_usuario', (idAExpulsar) => {
         if (usuariosActivos[idAExpulsar]) {
             console.log(`❌ Expulsando individualmente a: ${usuariosActivos[idAExpulsar].nombre}`);
@@ -37,9 +51,19 @@ io.on('connection', (socket) => {
         }
     });
 
+    // 2. Bloquear la web para TODOS de forma permanente
     socket.on('cerrar_web_global', () => {
-        console.log(`🚨 EL ADMINISTRADOR HA CERRADO LA WEB PARA TODOS.`);
+        webBloqueada = true;
+        console.log(`🚨 WEB BLOQUEADA POR EL ADMINISTRADOR.`);
+        // Envía la orden a todos los que NO sean el admin actual
         socket.broadcast.emit('orden_expulsion');
+    });
+
+    // NUEVO: 3. Desbloquear la web y permitir accesos otra vez
+    socket.on('abrir_web_global', () => {
+        webBloqueada = false;
+        console.log(`🔓 WEB DESBLOQUEADA POR EL ADMINISTRADOR.`);
+        io.emit('orden_desbloqueo'); // Avisa a todos que pueden volver a usarla
     });
 
     socket.on('disconnect', () => {
