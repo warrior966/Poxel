@@ -1,17 +1,16 @@
 <!DOCTYPE html>
-<html lang="es">
+<html
+lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Visor Protegido con Nombres</title>
-    <!-- Librería para conectar en tiempo real con el servidor de Render -->
     <script src="/socket.io/socket.io.js"></script>
     <style>
         body { font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; background: #1a1a1a; color: #eee; margin: 0; height: 100vh; overflow: hidden; }
         #header-ui { width: 100%; transition: margin-top 0.5s ease-in-out; z-index: 10; }
         .barra-navegacion { background: #2d2d2d; padding: 15px; display: flex; justify-content: center; gap: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
         
-        /* Ajuste de tamaño para los 3 campos de texto */
         input { width: 18%; padding: 10px 15px; border-radius: 5px; border: 1px solid #444; background: #3d3d3d; color: white; outline: none; }
         
         .btn { padding: 10px 15px; border-radius: 5px; border: none; cursor: pointer; font-weight: bold; transition: 0.2s; display: flex; align-items: center; gap: 5px; }
@@ -20,6 +19,9 @@
         .btn-ocultar { background: #5f6368; color: white; }
         .btn-emergencia { background: #ea4335; color: white; display: none; }
         #btn-mostrar { position: fixed; top: 10px; right: 10px; background: rgba(66, 133, 244, 0.8); color: white; border-radius: 50%; width: 40px; height: 40px; display: none; justify-content: center; align-items: center; cursor: pointer; z-index: 100; border: none; font-size: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.5); }
+        
+        /* Contenedor principal del visor */
+        #contenedor-principal { width: 100%; flex-grow: 1; display: flex; flex-direction: column; position: relative; }
         #visor { width: 100%; flex-grow: 1; border: none; background: white; }
         .oculto { margin-top: -85px; }
 
@@ -27,15 +29,21 @@
         #panel-admin { display: none; position: fixed; top: 15%; background: #252526; border: 2px solid #4285f4; border-radius: 8px; padding: 20px; width: 380px; box-shadow: 0 10px 25px rgba(0,0,0,0.7); z-index: 200; }
         #panel-admin h3 { margin-top: 0; color: #4285f4; border-bottom: 1px solid #444; padding-bottom: 10px; }
         
-        /* Botón de pánico masivo */
-        .btn-panic-global { background: #d93025; color: white; border: none; padding: 12px; width: 100%; border-radius: 5px; font-weight: bold; cursor: pointer; margin-bottom: 15px; font-size: 14px; transition: 0.2s; }
+        /* Botones de control global */
+        .btn-panic-global { background: #d93025; color: white; border: none; padding: 12px; width: 100%; border-radius: 5px; font-weight: bold; cursor: pointer; margin-bottom: 8px; font-size: 14px; transition: 0.2s; }
         .btn-panic-global:hover { background: #a51d14; }
         
-        .lista-usuarios { list-style: none; padding: 0; margin: 15px 0; max-height: 180px; overflow-y: auto; }
+        .btn-unpanic-global { background: #0f9d58; color: white; border: none; padding: 12px; width: 100%; border-radius: 5px; font-weight: bold; cursor: pointer; margin-bottom: 15px; font-size: 14px; transition: 0.2s; }
+        .btn-unpanic-global:hover { background: #0b7b43; }
+
+        .lista-usuarios { list-style: none; padding: 0; margin: 15px 0; max-height: 150px; overflow-y: auto; }
         .usuario-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; background: #333; margin-bottom: 5px; border-radius: 4px; font-size: 13px; }
         .btn-kick { background: #ea4335; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; }
         .btn-kick:hover { background: #c53929; }
         .btn-cerrar-admin { background: #5f6368; color: white; border: none; padding: 8px; width: 100%; border-radius: 4px; cursor: pointer; margin-top: 10px; }
+
+        /* Pantalla de bloqueo integrada */
+        #pantalla-bloqueo { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #111; color: #ea4335; flex-direction: column; justify-content: center; align-items: center; text-align: center; z-index: 50; }
     </style>
 </head>
 <body>
@@ -57,18 +65,31 @@
     <!-- Panel de control flotante para el Admin -->
     <div id="panel-admin">
         <h3>Panel Real-Time Admin</h3>
+        <!-- Botón para Bloquear -->
         <button class="btn-panic-global" onclick="cerrarWebGlobal()">🚨 Cerrar Web para Todos</button>
+        <!-- NUEVO BOTÓN: Para Desbloquear -->
+        <button class="btn-unpanic-global" onclick="abrirWebGlobal()">🔓 Abrir / Resetear Web</button>
+        
         <p>Dispositivos en línea:</p>
         <ul class="lista-usuarios" id="listaUsuarios"></ul>
         <button class="btn-cerrar-admin" onclick="cerrarPanelAdmin()">Cerrar Panel</button>
     </div>
 
-    <iframe id="visor" src="about:blank" allow="autoplay; fullscreen" allowfullscreen></iframe>
+    <!-- Zona de visualización protegida -->
+    <div id="contenedor-principal">
+        <iframe id="visor" src="about:blank" allow="autoplay; fullscreen" allowfullscreen></iframe>
+        
+        <!-- Contenedor del bloqueo -->
+        <div id="pantalla-bloqueo">
+            <h1 style="font-size:32px;">❌ ACCESO TERMINADO</h1>
+            <p style="color:#aaa; font-size:18px;">El administrador ha cerrado la plataforma temporalmente.</p>
+        </div>
+    </div>
 
     <script>
         let socket; 
+        let esAdmin = false;
 
-        // CONFIGURACIÓN DE CONTRASEÑAS (Cámbialas si quieres)
         const CONTRASEÑA_USUARIO = "chismechismoso";
         const CONTRASEÑA_ADMIN = "warrior2013";
 
@@ -79,22 +100,17 @@
             return url;
         }
 
-        // Función que conecta con el backend de Render de forma segura
         function conectarServidor(nombreElegido) {
             if (socket) socket.disconnect();
 
-            // Configuración optimizada para servidores en la nube (Render)
             socket = io({
                 query: { nombre: nombreElegido },
                 transports: ['websocket', 'polling'] 
             });
 
-            // Escuchar la lista actualizada enviada por el servidor
             socket.on('actualizar_usuarios', (usuarios) => {
                 const lista = document.getElementById('listaUsuarios');
                 lista.innerHTML = "";
-                
-                // Ocultar al admin de su propia lista de expulsión
                 const otrosUsuarios = usuarios.filter(u => u.id !== socket.id);
 
                 if (otrosUsuarios.length === 0) {
@@ -113,15 +129,20 @@
                 });
             });
 
-            // Pantalla de bloqueo instantánea si eres expulsado
+            // Recibir orden de bloqueo (Solo afecta a usuarios comunes, no al admin)
             socket.on('orden_expulsion', () => {
+                if (esAdmin) return; 
                 document.getElementById('visor').src = "about:blank";
-                document.body.innerHTML = `
-                    <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; background:#111; color:#ea4335; text-align:center; padding:20px;">
-                        <h1 style="font-size:32px; font-family:'Segoe UI', sans-serif;">❌ ACCESO TERMINADO</h1>
-                        <p style="color:#aaa; font-size:18px; font-family:'Segoe UI', sans-serif;">El administrador ha cerrado la plataforma globalmente.</p>
-                    </div>
-                `;
+                document.getElementById('pantalla-bloqueo').style.display = "flex";
+                alternarUI(false); 
+                document.getElementById('btn-mostrar').style.display = "none"; // Oculta el ojo "👁"
+            });
+
+            // NUEVO: Recibir orden de liberación / apertura
+            socket.on('orden_desbloqueo', () => {
+                document.getElementById('pantalla-bloqueo').style.display = "none";
+                document.getElementById('btn-mostrar').style.display = "flex";
+                alternarUI(true);
             });
         }
 
@@ -129,17 +150,18 @@
             const passInput = document.getElementById('passInput').value;
             let nombreElegido = document.getElementById('userInput').value.trim();
 
-            // Si el usuario no escribe un nombre, genera uno aleatorio
             if (nombreElegido === "") {
                 nombreElegido = "Usuario_" + Math.floor(100 + Math.random() * 900);
                 document.getElementById('userInput').value = nombreElegido;
             }
 
             if (passInput === CONTRASEÑA_ADMIN) {
+                esAdmin = true;
                 conectarServidor(nombreElegido + " (Admin)");
                 setTimeout(() => { abrirPanelAdmin(); }, 500); 
                 document.getElementById('passInput').value = ""; 
             } else if (passInput === CONTRASEÑA_USUARIO) {
+                esAdmin = false;
                 conectarServidor(nombreElegido);
                 cargarWeb();
                 document.getElementById('passInput').value = ""; 
@@ -173,28 +195,27 @@
             if(socket) socket.emit('cerrar_web_global');
         }
 
-        function alternarUI(mostrar) {
-            const header = document.getElementById('header-ui');
-            const btnMostrar = document.getElementById('btn-mostrar');
-            if (mostrar) {
-                header.classList.remove('oculto');
-                btnMostrar.style.display = "none";
-            } else {
-                header.classList.add('oculto');
-                btnMostrar.style.display = "flex";
-            }
-        }
+        // NUEVA FUNCIÓN: Abre la web de nuevo para todo el mundo
 
-        function abrirFuera() {
-            let url = limpiarURL(document.getElementById('urlInput').value);
-            if (url !== "") window.open(url, '_blank');
-        }
-
-        document.getElementById('passInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') { validarYCargar(); }
-        });
-    </script>
-</body>
-</html>
-
+function abrirWebGlobal() {
+if(socket) socket.emit('abrir_web_global');
+}
+function alternarUI(mostrar) {
+const header = document.getElementById('header-ui');
+const btnMostrar = document.getElementById('btn-mostrar');
+if (mostrar) {
+header.classList.remove('oculto');
+btnMostrar.style.display = "none";
+} else {
+header.classList.add('oculto');
+btnMostrar.style.display = "flex";
+}
+}
+function abrirFuera() {
+let url = limpiarURL(document.getElementById('urlInput').value);
+if (url !== "") window.open(url, '_blank');
+}
+document.getElementById('passInput').addEventListener('keypress', function(e) {
+if (e.key === 'Enter') { validarYCargar(); }
+});
 
