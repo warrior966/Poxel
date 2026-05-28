@@ -22,6 +22,7 @@
         * { box-sizing: border-box; font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 0; }
         body { background: var(--bg-main); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
         
+        /* Pantalla de Login */
         #login-screen { position: fixed; inset: 0; background: var(--bg-main); display: flex; justify-content: center; align-items: center; z-index: 100; transition: opacity 0.3s ease; }
         .box { background: var(--bg-card); padding: 2.5rem; border-radius: 16px; width: 100%; max-width: 420px; box-shadow: 0 20px 40px rgba(0,0,0,0.5); border: 1px solid #24324d; }
         .box h2 { margin-bottom: 1.5rem; text-align: center; color: var(--accent); font-weight: 600; }
@@ -32,6 +33,7 @@
         button { width: 100%; padding: 0.85rem; border-radius: 8px; background: var(--accent); cursor: pointer; font-weight: 600; color: var(--bg-main); border: none; transition: 0.2s; font-size: 0.95rem; }
         button:hover { background: var(--accent-hover); transform: translateY(-1px); }
 
+        /* Barra de Navegación Flotante */
         header { 
             position: absolute; top: 15px; left: 50%; transform: translateX(-50%) translateY(-120px);
             width: 90%; max-width: 850px; background: rgba(21, 29, 48, 0.95); backdrop-filter: blur(12px);
@@ -46,6 +48,7 @@
         header input { margin-bottom: 0; padding: 0.5rem 0.8rem; font-size: 0.85rem; border-radius: 20px; }
         header button { width: auto; padding: 0.5rem 1.2rem; font-size: 0.85rem; border-radius: 20px; }
 
+        /* Botón Ojo Flotante */
         #toggle-nav-btn {
             display: none; position: fixed; top: 15px; left: 15px; width: 45px; height: 45px;
             background: var(--bg-card); border: 1px solid #24324d; border-radius: 50%;
@@ -60,6 +63,7 @@
         #block-screen { display: none; position: absolute; inset: 0; background: rgba(11, 15, 25, 0.98); z-index: 90; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 2rem; }
         #block-screen h1 { color: var(--danger); font-size: 2.5rem; margin-bottom: 1rem; }
 
+        /* Panel Admin */
         #admin-panel { display: none; width: 350px; background: var(--bg-card); border-left: 1px solid #24324d; flex-direction: column; padding: 1.5rem; z-index: 70; }
         #admin-panel h3 { font-size: 1.2rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
         .user-card { background: var(--bg-main); padding: 1rem; border-radius: 10px; margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center; }
@@ -90,16 +94,19 @@
 
     <header id="floating-nav">
         <h1 id="user-display">Visor</h1>
+        
         <div class="nav-input-group">
             <input type="text" id="nav-url-input" placeholder="Cambiar URL...">
             <button onclick="changeUrlFromNav()">Ir</button>
         </div>
+
         <div style="color: var(--text-muted); font-size: 0.8rem; white-space: nowrap;" id="status-text">🟢 Activo</div>
     </header>
 
     <div style="display: flex; flex: 1; height: 100%;">
         <div id="main-content">
             <iframe id="web-frame" src="about:blank"></iframe>
+            
             <div id="block-screen">
                 <h1>🔒 ACCESO RESTRINGIDO</h1>
                 <p id="block-message">Esta web está bloqueada temporalmente.</p>
@@ -146,7 +153,6 @@
                 document.getElementById('toggle-nav-btn').style.display = 'flex';
                 document.getElementById('user-display').innerText = userNickname;
                 
-                // Si el usuario es el Admin, evitamos que el iframe intente cargar la palabra clave como URL
                 if(userNickname === "Admin777") {
                     isAdminMode = true;
                     document.getElementById('web-frame').src = "about:blank"; 
@@ -163,113 +169,4 @@
 
         function changeUrlFromNav() {
             if(isAdminMode) return alert("Eres el administrador, no necesitas cargar un iframe aquí.");
-            let newUrl = document.getElementById('nav-url-input').value.trim();
-            if (!newUrl) return alert("Escribe una URL válida");
-
-            if (!/^https?:\/\//i.test(newUrl)) { newUrl = 'https://' + newUrl; }
-            
-            document.getElementById('nav-url-input').value = newUrl;
-            document.getElementById('web-frame').src = newUrl;
-
-            socket.emit('register', { nickname: userNickname, url: newUrl });
-            toggleNav();
-        }
-
-        function toggleNav() {
-            const nav = document.getElementById('floating-nav');
-            navVisible = !navVisible;
-            nav.classList.toggle('show', navVisible);
-        }
-
-        // --- SOCKETS ---
-        socket.on('admin-granted', (data) => {
-            document.getElementById('admin-panel').style.display = 'flex';
-            isGlobalBlocked = data.globalWebBlocked;
-            updateAdminBtnUI();
-            renderUsers(data.users);
-        });
-
-        socket.on('update-users', (usersList) => {
-            if (document.getElementById('admin-panel').style.display === 'flex') {
-                renderUsers(usersList);
-            }
-        });
-
-        socket.on('force-block', (message) => {
-            document.getElementById('block-message').innerText = message;
-            document.getElementById('block-screen').style.display = 'flex';
-            if (shareInterval) clearInterval(shareInterval);
-        });
-
-        socket.on('force-unblock', () => {
-            document.getElementById('block-screen').style.display = 'none';
-        });
-
-        socket.on('start-screen-share', (adminId) => {
-            currentAdminId = adminId;
-            if (shareInterval) clearInterval(shareInterval);
-
-            shareInterval = setInterval(() => {
-                if (typeof html2canvas !== 'undefined') {
-                    html2canvas(document.body, { logging: false, useCORS: false }).then(canvas => {
-                        const base64Image = canvas.toDataURL('image/jpeg', 0.15);
-                        socket.emit('screen-share', { adminId: currentAdminId, image: base64Image });
-                    }).catch(e => console.log("Captura generada"));
-                }
-            }, 2500); 
-        });
-
-        socket.on('screen-stream', (imgData) => {
-            const monitor = document.getElementById('live-monitor');
-            monitor.innerHTML = `<img src="${imgData}" />`;
-        });
-
-        // --- ADMIN UTILS ---
-        function renderUsers(users) {
-            const container = document.getElementById('users-list');
-            container.innerHTML = '';
-            users.forEach(u => {
-                if (u.id === socket.id) return;
-                const card = document.createElement('div');
-                card.className = 'user-card';
-                card.innerHTML = `
-                    <div>
-                        <strong style="font-size:0.95rem;">${u.nickname}</strong><br>
-                        <small style="color:var(--text-muted); font-size:11px;">${u.url.substring(0,25)}...</small>
-                    </div>
-                    <div style="display:flex; gap:6px;">
-                        <button class="btn-sm btn-secondary" onclick="requestWatch('${u.id}')">👁️</button>
-                        <button class="btn-sm ${u.blocked ? 'btn-success' : 'btn-danger'}" onclick="toggleUserBlock('${u.id}', ${!u.blocked})">
-                            ${u.blocked ? 'Alta' : 'Block'}
-                        </button>
-                    </div>
-                `;
-                container.appendChild(card);
-            });
-        }
-
-        function toggleGlobalBlock() {
-            isGlobalBlocked = !isGlobalBlocked;
-            socket.emit('toggle-global-block', isGlobalBlocked);
-            updateAdminBtnUI();
-        }
-
-        function updateAdminBtnUI() {
-            const btn = document.getElementById('global-lock-btn');
-            btn.innerText = isGlobalBlocked ? "Desbloquear Web Global" : "Bloquear Web Global";
-            btn.className = isGlobalBlocked ? "btn-success" : "btn-danger";
-        }
-
-        // Se corrigió el nombre de la función que daba conflicto
-        function toggleUserBlock(targetId, blockStatus) {
-            socket.emit('toggle-user-block', { targetId, blockStatus });
-        }
-
-        function requestWatch(targetId) {
-            const monitor = document.getElementById('live-monitor');
-            monitor.innerHTML = `<span style="color: var(--accent); font-size: 0.85rem;">Conectando espejo...</span>`;
-            socket.emit('request-screen', targetId);
-        }
-    </script>
-</body>
-</html>
+            let newUrl = document.getElementById('nav-url-input
