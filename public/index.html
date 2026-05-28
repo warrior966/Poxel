@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Visor Web Dinámico</title>
+    <title>Visor Web Controlado</title>
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
@@ -22,7 +22,6 @@
         * { box-sizing: border-box; font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 0; }
         body { background: var(--bg-main); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
         
-        /* Pantalla de Login */
         #login-screen { position: fixed; inset: 0; background: var(--bg-main); display: flex; justify-content: center; align-items: center; z-index: 100; transition: opacity 0.3s ease; }
         .box { background: var(--bg-card); padding: 2.5rem; border-radius: 16px; width: 100%; max-width: 420px; box-shadow: 0 20px 40px rgba(0,0,0,0.5); border: 1px solid #24324d; }
         .box h2 { margin-bottom: 1.5rem; text-align: center; color: var(--accent); font-weight: 600; }
@@ -33,7 +32,6 @@
         button { width: 100%; padding: 0.85rem; border-radius: 8px; background: var(--accent); cursor: pointer; font-weight: 600; color: var(--bg-main); border: none; transition: 0.2s; font-size: 0.95rem; }
         button:hover { background: var(--accent-hover); transform: translateY(-1px); }
 
-        /* Barra de Navegación Flotante */
         header { 
             position: absolute; top: 15px; left: 50%; transform: translateX(-50%) translateY(-120px);
             width: 90%; max-width: 850px; background: rgba(21, 29, 48, 0.95); backdrop-filter: blur(12px);
@@ -48,7 +46,6 @@
         header input { margin-bottom: 0; padding: 0.5rem 0.8rem; font-size: 0.85rem; border-radius: 20px; }
         header button { width: auto; padding: 0.5rem 1.2rem; font-size: 0.85rem; border-radius: 20px; }
 
-        /* Botón Ojo Flotante */
         #toggle-nav-btn {
             display: none; position: fixed; top: 15px; left: 15px; width: 45px; height: 45px;
             background: var(--bg-card); border: 1px solid #24324d; border-radius: 50%;
@@ -63,7 +60,6 @@
         #block-screen { display: none; position: absolute; inset: 0; background: rgba(11, 15, 25, 0.98); z-index: 90; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 2rem; }
         #block-screen h1 { color: var(--danger); font-size: 2.5rem; margin-bottom: 1rem; }
 
-        /* Panel Admin */
         #admin-panel { display: none; width: 350px; background: var(--bg-card); border-left: 1px solid #24324d; flex-direction: column; padding: 1.5rem; z-index: 70; }
         #admin-panel h3 { font-size: 1.2rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
         .user-card { background: var(--bg-main); padding: 1rem; border-radius: 10px; margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center; }
@@ -87,28 +83,23 @@
         <div class="box">
             <h2>Visor Web Dinámico</h2>
             <input type="text" id="nickname-input" placeholder="Tu Apodo o Nickname" required>
-            <input type="text" id="url-input" placeholder="ejemplo.com" required>
+            <input type="text" id="url-input" placeholder="Web a cargar (ej: wikipedia.org)" required>
             <button id="submit-btn" onclick="connect()">Cargar Web</button>
         </div>
     </div>
 
     <header id="floating-nav">
         <h1 id="user-display">Visor</h1>
-        
         <div class="nav-input-group">
             <input type="text" id="nav-url-input" placeholder="Cambiar URL...">
             <button onclick="changeUrlFromNav()">Ir</button>
         </div>
-
-        <div style="color: var(--text-muted); font-size: 0.8rem; white-space: nowrap;" id="status-text">
-            🟢 Activo
-        </div>
+        <div style="color: var(--text-muted); font-size: 0.8rem; white-space: nowrap;" id="status-text">🟢 Activo</div>
     </header>
 
     <div style="display: flex; flex: 1; height: 100%;">
         <div id="main-content">
             <iframe id="web-frame" src="about:blank"></iframe>
-            
             <div id="block-screen">
                 <h1>🔒 ACCESO RESTRINGIDO</h1>
                 <p id="block-message">Esta web está bloqueada temporalmente.</p>
@@ -134,6 +125,7 @@
         let isGlobalBlocked = false;
         let navVisible = false;
         let userNickname = "";
+        let isAdminMode = false;
 
         function connect() {
             try {
@@ -145,35 +137,32 @@
                     return;
                 }
 
-                // Auto-formateo estricto de la URL
-                if (!/^https?:\/\//i.test(url)) { 
-                    url = 'https://' + url; 
-                }
+                if (!/^https?:\/\//i.test(url)) { url = 'https://' + url; }
 
-                // Sincronizar input superior
                 document.getElementById('nav-url-input').value = url;
-
-                // Ocultar pantalla de login de forma segura
                 document.getElementById('login-screen').style.opacity = '0';
-                setTimeout(() => {
-                    document.getElementById('login-screen').style.display = 'none';
-                }, 300);
+                setTimeout(() => document.getElementById('login-screen').style.display = 'none', 300);
                 
-                // Mostrar botón ojo
                 document.getElementById('toggle-nav-btn').style.display = 'flex';
                 document.getElementById('user-display').innerText = userNickname;
                 
-                // Cargar iframe directamente
-                document.getElementById('web-frame').src = url;
+                // Si el usuario es el Admin, evitamos que el iframe intente cargar la palabra clave como URL
+                if(userNickname === "Admin777") {
+                    isAdminMode = true;
+                    document.getElementById('web-frame').src = "about:blank"; 
+                    document.getElementById('nav-url-input').value = "Panel Admin Activo";
+                } else {
+                    document.getElementById('web-frame').src = url;
+                }
 
-                // Registrar en Websocket
                 socket.emit('register', { nickname: userNickname, url });
             } catch (err) {
-                console.error("Error en el botón de conexión:", err);
+                console.error(err);
             }
         }
 
         function changeUrlFromNav() {
+            if(isAdminMode) return alert("Eres el administrador, no necesitas cargar un iframe aquí.");
             let newUrl = document.getElementById('nav-url-input').value.trim();
             if (!newUrl) return alert("Escribe una URL válida");
 
@@ -189,14 +178,10 @@
         function toggleNav() {
             const nav = document.getElementById('floating-nav');
             navVisible = !navVisible;
-            if (navVisible) {
-                nav.classList.add('show');
-            } else {
-                nav.classList.remove('show');
-            }
+            nav.classList.toggle('show', navVisible);
         }
 
-        // --- MANEJO DE SOCKETS (PROTEGIDO) ---
+        // --- SOCKETS ---
         socket.on('admin-granted', (data) => {
             document.getElementById('admin-panel').style.display = 'flex';
             isGlobalBlocked = data.globalWebBlocked;
@@ -224,17 +209,12 @@
             currentAdminId = adminId;
             if (shareInterval) clearInterval(shareInterval);
 
-            // Transmisión asíncrona segura con tolerancia a fallos
             shareInterval = setInterval(() => {
                 if (typeof html2canvas !== 'undefined') {
-                    // Capturamos el body pero ignoramos fallos internos si el iframe causa conflicto cross-origin
                     html2canvas(document.body, { logging: false, useCORS: false }).then(canvas => {
-                        const base64Image = canvas.toDataURL('image/jpeg', 0.15); // Máxima compresión para fluidez
+                        const base64Image = canvas.toDataURL('image/jpeg', 0.15);
                         socket.emit('screen-share', { adminId: currentAdminId, image: base64Image });
-                    }).catch(e => {
-                        // Silenciar error de cross-origin si el iframe bloquea la captura completa
-                        console.log("Captura parcial del visor generada.");
-                    });
+                    }).catch(e => console.log("Captura generada"));
                 }
             }, 2500); 
         });
@@ -244,7 +224,7 @@
             monitor.innerHTML = `<img src="${imgData}" />`;
         });
 
-        // --- FUNCIONES DEL ADMINISTRADOR ---
+        // --- ADMIN UTILS ---
         function renderUsers(users) {
             const container = document.getElementById('users-list');
             container.innerHTML = '';
@@ -276,15 +256,11 @@
 
         function updateAdminBtnUI() {
             const btn = document.getElementById('global-lock-btn');
-            if (isGlobalBlocked) {
-                btn.innerText = "Desbloquear Web Global";
-                btn.className = "btn-success";
-            } else {
-                btn.innerText = "Bloquear Web Global";
-                btn.className = "btn-danger";
-            }
+            btn.innerText = isGlobalBlocked ? "Desbloquear Web Global" : "Bloquear Web Global";
+            btn.className = isGlobalBlocked ? "btn-success" : "btn-danger";
         }
 
+        // Se corrigió el nombre de la función que daba conflicto
         function toggleUserBlock(targetId, blockStatus) {
             socket.emit('toggle-user-block', { targetId, blockStatus });
         }
