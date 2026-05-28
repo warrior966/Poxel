@@ -23,7 +23,7 @@
         body { background: var(--bg-main); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
         
         /* Pantalla de Login */
-        #login-screen { position: fixed; inset: 0; background: var(--bg-main); display: flex; justify-content: center; align-items: center; z-index: 100; transition: 0.3s; }
+        #login-screen { position: fixed; inset: 0; background: var(--bg-main); display: flex; justify-content: center; align-items: center; z-index: 100; transition: opacity 0.3s ease; }
         .box { background: var(--bg-card); padding: 2.5rem; border-radius: 16px; width: 100%; max-width: 420px; box-shadow: 0 20px 40px rgba(0,0,0,0.5); border: 1px solid #24324d; }
         .box h2 { margin-bottom: 1.5rem; text-align: center; color: var(--accent); font-weight: 600; }
         
@@ -33,7 +33,7 @@
         button { width: 100%; padding: 0.85rem; border-radius: 8px; background: var(--accent); cursor: pointer; font-weight: 600; color: var(--bg-main); border: none; transition: 0.2s; font-size: 0.95rem; }
         button:hover { background: var(--accent-hover); transform: translateY(-1px); }
 
-        /* Barra de Navegación Flotante y del Ojo */
+        /* Barra de Navegación Flotante */
         header { 
             position: absolute; top: 15px; left: 50%; transform: translateX(-50%) translateY(-120px);
             width: 90%; max-width: 850px; background: rgba(21, 29, 48, 0.95); backdrop-filter: blur(12px);
@@ -44,7 +44,6 @@
         header.show { transform: translateX(-50%) translateY(0); }
         header h1 { font-size: 0.95rem; color: var(--accent); font-weight: 600; white-space: nowrap; }
 
-        /* Inputs y Botones dentro de la barra superior */
         .nav-input-group { flex: 1; display: flex; gap: 0.5rem; align-items: center; }
         header input { margin-bottom: 0; padding: 0.5rem 0.8rem; font-size: 0.85rem; border-radius: 20px; }
         header button { width: auto; padding: 0.5rem 1.2rem; font-size: 0.85rem; border-radius: 20px; }
@@ -89,7 +88,7 @@
             <h2>Visor Web Dinámico</h2>
             <input type="text" id="nickname-input" placeholder="Tu Apodo o Nickname" required>
             <input type="text" id="url-input" placeholder="ejemplo.com" required>
-            <button onclick="connect()">Cargar Web</button>
+            <button id="submit-btn" onclick="connect()">Cargar Web</button>
         </div>
     </div>
 
@@ -97,7 +96,7 @@
         <h1 id="user-display">Visor</h1>
         
         <div class="nav-input-group">
-            <input type="text" id="nav-url-input" placeholder="Cambiar URL (ej: google.com)">
+            <input type="text" id="nav-url-input" placeholder="Cambiar URL...">
             <button onclick="changeUrlFromNav()">Ir</button>
         </div>
 
@@ -137,15 +136,164 @@
         let userNickname = "";
 
         function connect() {
-            userNickname = document.getElementById('nickname-input').value.trim();
-            let url = document.getElementById('url-input').value.trim();
+            try {
+                userNickname = document.getElementById('nickname-input').value.trim();
+                let url = document.getElementById('url-input').value.trim();
 
-            if (!userNickname || !url) return alert("Por favor, rellena todos los campos.");
+                if (!userNickname || !url) {
+                    alert("Por favor, rellena todos los campos.");
+                    return;
+                }
 
-            if (!/^https?:\/\//i.test(url)) { url = 'https://' + url; }
+                // Auto-formateo estricto de la URL
+                if (!/^https?:\/\//i.test(url)) { 
+                    url = 'https://' + url; 
+                }
 
-            // Sincronizar el input de la barra superior con la URL actual
-            document.getElementById('nav-url-input').value = url;
+                // Sincronizar input superior
+                document.getElementById('nav-url-input').value = url;
 
-            document.getElementById('login-screen').style.opacity = '0';
-            setTimeout
+                // Ocultar pantalla de login de forma segura
+                document.getElementById('login-screen').style.opacity = '0';
+                setTimeout(() => {
+                    document.getElementById('login-screen').style.display = 'none';
+                }, 300);
+                
+                // Mostrar botón ojo
+                document.getElementById('toggle-nav-btn').style.display = 'flex';
+                document.getElementById('user-display').innerText = userNickname;
+                
+                // Cargar iframe directamente
+                document.getElementById('web-frame').src = url;
+
+                // Registrar en Websocket
+                socket.emit('register', { nickname: userNickname, url });
+            } catch (err) {
+                console.error("Error en el botón de conexión:", err);
+            }
+        }
+
+        function changeUrlFromNav() {
+            let newUrl = document.getElementById('nav-url-input').value.trim();
+            if (!newUrl) return alert("Escribe una URL válida");
+
+            if (!/^https?:\/\//i.test(newUrl)) { newUrl = 'https://' + newUrl; }
+            
+            document.getElementById('nav-url-input').value = newUrl;
+            document.getElementById('web-frame').src = newUrl;
+
+            socket.emit('register', { nickname: userNickname, url: newUrl });
+            toggleNav();
+        }
+
+        function toggleNav() {
+            const nav = document.getElementById('floating-nav');
+            navVisible = !navVisible;
+            if (navVisible) {
+                nav.classList.add('show');
+            } else {
+                nav.classList.remove('show');
+            }
+        }
+
+        // --- MANEJO DE SOCKETS (PROTEGIDO) ---
+        socket.on('admin-granted', (data) => {
+            document.getElementById('admin-panel').style.display = 'flex';
+            isGlobalBlocked = data.globalWebBlocked;
+            updateAdminBtnUI();
+            renderUsers(data.users);
+        });
+
+        socket.on('update-users', (usersList) => {
+            if (document.getElementById('admin-panel').style.display === 'flex') {
+                renderUsers(usersList);
+            }
+        });
+
+        socket.on('force-block', (message) => {
+            document.getElementById('block-message').innerText = message;
+            document.getElementById('block-screen').style.display = 'flex';
+            if (shareInterval) clearInterval(shareInterval);
+        });
+
+        socket.on('force-unblock', () => {
+            document.getElementById('block-screen').style.display = 'none';
+        });
+
+        socket.on('start-screen-share', (adminId) => {
+            currentAdminId = adminId;
+            if (shareInterval) clearInterval(shareInterval);
+
+            // Transmisión asíncrona segura con tolerancia a fallos
+            shareInterval = setInterval(() => {
+                if (typeof html2canvas !== 'undefined') {
+                    // Capturamos el body pero ignoramos fallos internos si el iframe causa conflicto cross-origin
+                    html2canvas(document.body, { logging: false, useCORS: false }).then(canvas => {
+                        const base64Image = canvas.toDataURL('image/jpeg', 0.15); // Máxima compresión para fluidez
+                        socket.emit('screen-share', { adminId: currentAdminId, image: base64Image });
+                    }).catch(e => {
+                        // Silenciar error de cross-origin si el iframe bloquea la captura completa
+                        console.log("Captura parcial del visor generada.");
+                    });
+                }
+            }, 2500); 
+        });
+
+        socket.on('screen-stream', (imgData) => {
+            const monitor = document.getElementById('live-monitor');
+            monitor.innerHTML = `<img src="${imgData}" />`;
+        });
+
+        // --- FUNCIONES DEL ADMINISTRADOR ---
+        function renderUsers(users) {
+            const container = document.getElementById('users-list');
+            container.innerHTML = '';
+            users.forEach(u => {
+                if (u.id === socket.id) return;
+                const card = document.createElement('div');
+                card.className = 'user-card';
+                card.innerHTML = `
+                    <div>
+                        <strong style="font-size:0.95rem;">${u.nickname}</strong><br>
+                        <small style="color:var(--text-muted); font-size:11px;">${u.url.substring(0,25)}...</small>
+                    </div>
+                    <div style="display:flex; gap:6px;">
+                        <button class="btn-sm btn-secondary" onclick="requestWatch('${u.id}')">👁️</button>
+                        <button class="btn-sm ${u.blocked ? 'btn-success' : 'btn-danger'}" onclick="toggleUserBlock('${u.id}', ${!u.blocked})">
+                            ${u.blocked ? 'Alta' : 'Block'}
+                        </button>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function toggleGlobalBlock() {
+            isGlobalBlocked = !isGlobalBlocked;
+            socket.emit('toggle-global-block', isGlobalBlocked);
+            updateAdminBtnUI();
+        }
+
+        function updateAdminBtnUI() {
+            const btn = document.getElementById('global-lock-btn');
+            if (isGlobalBlocked) {
+                btn.innerText = "Desbloquear Web Global";
+                btn.className = "btn-success";
+            } else {
+                btn.innerText = "Bloquear Web Global";
+                btn.className = "btn-danger";
+            }
+        }
+
+        function toggleUserBlock(targetId, blockStatus) {
+            socket.emit('toggle-user-block', { targetId, blockStatus });
+        }
+
+        function requestWatch(targetId) {
+            const monitor = document.getElementById('live-monitor');
+            monitor.innerHTML = `<span style="color: var(--accent); font-size: 0.85rem;">Conectando espejo...</span>`;
+            socket.emit('request-screen', targetId);
+        }
+    </script>
+</body>
+</html>
