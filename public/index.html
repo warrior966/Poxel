@@ -68,11 +68,9 @@
         .btn-success { background: var(--success); color: white; }
         .btn-secondary { background: var(--bg-input); color: var(--text); border: 1px solid #334155; }
         
-        /* Modificado: Contenedor de Chat en Panel Admin */
         #chat-monitor { width: 100%; height: 250px; background: #05070c; margin-top: auto; border-radius: 10px; border: 1px solid #24324d; display: flex; flex-direction: column; padding: 0.5rem; }
         #chat-logs { flex: 1; overflow-y: auto; font-size: 0.85rem; padding: 0.25rem; margin-bottom: 0.5rem; display: flex; flex-direction: column; gap: 4px; }
         
-        /* Modificado: Caja flotante de Chat para los usuarios comunes */
         #user-chat-box { display: none; position: fixed; bottom: 20px; right: 20px; width: 300px; background: var(--bg-card); border: 1px solid var(--accent); border-radius: 12px; padding: 1rem; z-index: 95; box-shadow: 0 10px 25px rgba(0,0,0,0.4); }
     </style>
 </head>
@@ -127,7 +125,10 @@
     </div>
 
     <div id="user-chat-box">
-        <h4 style="font-size:0.9rem; color:var(--accent); margin-bottom:8px;">💬 Mensaje del Admin</h4>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <h4 style="font-size:0.9rem; color:var(--accent); margin: 0;">💬 Mensaje del Admin</h4>
+            <button onclick="document.getElementById('user-chat-box').style.display = 'none'" style="width: auto; background: transparent; color: var(--text-muted); border: none; font-size: 1rem; cursor: pointer; padding: 0 4px;" onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--text-muted)'">✕</button>
+        </div>
         <div id="user-chat-logs" style="font-size:0.85rem; max-height:100px; overflow-y:auto; margin-bottom:8px; color:#fff;"></div>
         <div style="display:flex; gap:4px;">
             <input type="text" id="user-reply-input" placeholder="Responder..." style="margin:0; padding:0.4rem; font-size:0.85rem;">
@@ -141,8 +142,6 @@
         let navVisible = false;
         let userNickname = "";
         let isAdminMode = false;
-        
-        // Variables añadidas para rastrear el canal de chat abierto
         let selectedUserId = null;
         let currentAdminIdForUser = null; 
 
@@ -199,7 +198,6 @@
             nav.classList.toggle('show', navVisible);
         }
 
-        // --- MANEJO DE SOCKETS ---
         socket.on('admin-granted', (data) => {
             document.getElementById('admin-panel').style.display = 'flex';
             isGlobalBlocked = data.globalWebBlocked;
@@ -222,7 +220,6 @@
             document.getElementById('block-screen').style.display = 'none';
         });
 
-        // NUEVO: El usuario recibe un mensaje del Admin
         socket.on('receive-message', ({ from, fromId, message }) => {
             currentAdminIdForUser = fromId;
             document.getElementById('user-chat-box').style.display = 'block';
@@ -231,7 +228,6 @@
             logs.scrollTop = logs.scrollHeight;
         });
 
-        // NUEVO: El Admin recibe la respuesta del usuario
         socket.on('receive-reply', ({ from, fromId, message }) => {
             if(selectedUserId === fromId) {
                 const logs = document.getElementById('chat-logs');
@@ -240,7 +236,6 @@
             }
         });
 
-        // --- ACCIONES DE CHAT ---
         function selectUserChat(targetId, nickname) {
             selectedUserId = targetId;
             document.getElementById('chat-title').innerText = `Chat con: ${nickname}`;
@@ -274,7 +269,6 @@
             input.value = '';
         }
 
-        // --- ADMIN UTILS ---
         function renderUsers(users) {
             const container = document.getElementById('users-list');
             container.innerHTML = '';
