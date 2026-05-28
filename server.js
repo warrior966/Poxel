@@ -8,7 +8,7 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
-const ADMIN_NICKNAME_TRIGGER = "Admin777"; 
+const ADMIN_NICKNAME_TRIGGER = "Admin0503"; 
 
 let globalWebBlocked = false;
 let users = {}; 
