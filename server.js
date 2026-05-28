@@ -5,12 +5,10 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-    maxHttpBufferSize: 1e7
-});
+const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
-const ADMIN_NICKNAME_TRIGGER = "Admin0503"; 
+const ADMIN_NICKNAME_TRIGGER = "Admin777"; 
 
 let globalWebBlocked = false;
 let users = {}; 
@@ -67,13 +65,15 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('screen-share', ({ adminId, image }) => {
-        io.to(adminId).emit('screen-stream', image);
+    // NUEVO: Admin envía mensaje a un usuario específico
+    socket.on('send-message', ({ targetId, message }) => {
+        if (users[socket.id]?.role !== 'admin') return;
+        io.to(targetId).emit('receive-message', { from: users[socket.id].nickname, fromId: socket.id, message });
     });
 
-    socket.on('request-screen', (targetId) => {
-        if (users[socket.id]?.role !== 'admin') return;
-        io.to(targetId).emit('start-screen-share', socket.id);
+    // NUEVO: Usuario responde al Admin
+    socket.on('reply-message', ({ adminId, message }) => {
+        io.to(adminId).emit('receive-reply', { from: users[socket.id].nickname, fromId: socket.id, message });
     });
 
     socket.on('disconnect', () => {
