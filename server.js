@@ -6,28 +6,27 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-    maxHttpBufferSize: 1e7 // Capacidad para las capturas de pantalla
+    maxHttpBufferSize: 1e7
 });
 
 const PORT = process.env.PORT || 3000;
-const ADMIN_TRIGGER_URL = "https://tu-url-secreta-admin.com";
+const ADMIN_NICKNAME_TRIGGER = "Admin0503"; // 👈 CAMBIA TU APODO SECRETO AQUÍ
 
 let globalWebBlocked = false;
 let users = {}; 
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// LÓGICA DE SOCKETS (Control de usuarios y administración)
 io.on('connection', (socket) => {
     
     socket.on('register', ({ nickname, url }) => {
-        // Corrección de URL interna
         let finalUrl = url.trim();
         if (!/^https?:\/\//i.test(finalUrl)) {
             finalUrl = 'https://' + finalUrl;
         }
 
-        const isAdmin = (finalUrl === ADMIN_TRIGGER_URL);
+        // Ahora comprobamos si el APODO coincide con el secreto
+        const isAdmin = (nickname.trim() === ADMIN_NICKNAME_TRIGGER);
         
         users[socket.id] = {
             id: socket.id,
@@ -38,6 +37,7 @@ io.on('connection', (socket) => {
         };
 
         if (isAdmin) {
+            // Si eres admin, te envía la lista de usuarios y estado
             socket.emit('admin-granted', { globalWebBlocked, users: Object.values(users) });
         } else if (globalWebBlocked) {
             socket.emit('force-block', 'La web está bloqueada globalmente por el administrador.');
@@ -85,5 +85,5 @@ io.on('connection', (socket) => {
 });
 
 server.listen(PORT, () => {
-    console.log(`Servidor corriendo en puerto ${PORT}`);
+    console.log(`Servidor listo en puerto ${PORT}`);
 });
