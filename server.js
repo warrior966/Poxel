@@ -10,7 +10,7 @@ const io = new Server(server, {
 });
 
 const PORT = process.env.PORT || 3000;
-const ADMIN_NICKNAME_TRIGGER = "Admin0503"; // 👈 CAMBIA TU APODO SECRETO AQUÍ
+const ADMIN_NICKNAME_TRIGGER = "Admin0503"; 
 
 let globalWebBlocked = false;
 let users = {}; 
@@ -25,7 +25,6 @@ io.on('connection', (socket) => {
             finalUrl = 'https://' + finalUrl;
         }
 
-        // Ahora comprobamos si el APODO coincide con el secreto
         const isAdmin = (nickname.trim() === ADMIN_NICKNAME_TRIGGER);
         
         users[socket.id] = {
@@ -37,7 +36,6 @@ io.on('connection', (socket) => {
         };
 
         if (isAdmin) {
-            // Si eres admin, te envía la lista de usuarios y estado
             socket.emit('admin-granted', { globalWebBlocked, users: Object.values(users) });
         } else if (globalWebBlocked) {
             socket.emit('force-block', 'La web está bloqueada globalmente por el administrador.');
