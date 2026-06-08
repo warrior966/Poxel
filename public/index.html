@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Visor Web Controlado</title>
-    <script src="/socket.io/socket.io.js"></script>
+    <title>Visor Web Simple</title>
     <style>
         :root {
             --bg-main: #0b0f19;
@@ -14,13 +13,12 @@
             --accent-hover: #0ea5e9;
             --text: #f8fafc;
             --text-muted: #64748b;
-            --danger: #ef4444;
-            --success: #22c55e;
         }
 
         * { box-sizing: border-box; font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 0; }
         body { background: var(--bg-main); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
         
+        /* Pantalla de Login Inicial */
         #login-screen { position: fixed; inset: 0; background: var(--bg-main); display: flex; justify-content: center; align-items: center; z-index: 100; transition: opacity 0.3s ease; }
         .box { background: var(--bg-card); padding: 2.5rem; border-radius: 16px; width: 100%; max-width: 420px; box-shadow: 0 20px 40px rgba(0,0,0,0.5); border: 1px solid #24324d; }
         .box h2 { margin-bottom: 1.5rem; text-align: center; color: var(--accent); font-weight: 600; }
@@ -31,6 +29,7 @@
         button { width: 100%; padding: 0.85rem; border-radius: 8px; background: var(--accent); cursor: pointer; font-weight: 600; color: var(--bg-main); border: none; transition: 0.2s; font-size: 0.95rem; }
         button:hover { background: var(--accent-hover); transform: translateY(-1px); }
 
+        /* Barra de Navegación Superior Flotante */
         header { 
             position: absolute; top: 15px; left: 50%; transform: translateX(-50%) translateY(-120px);
             width: 90%; max-width: 850px; background: rgba(21, 29, 48, 0.95); backdrop-filter: blur(12px);
@@ -45,6 +44,7 @@
         header input { margin-bottom: 0; padding: 0.5rem 0.8rem; font-size: 0.85rem; border-radius: 20px; }
         header button { width: auto; padding: 0.5rem 1.2rem; font-size: 0.85rem; border-radius: 20px; }
 
+        /* Botón Ojo Flotante */
         #toggle-nav-btn {
             display: none; position: fixed; top: 15px; left: 15px; width: 45px; height: 45px;
             background: var(--bg-card); border: 1px solid #24324d; border-radius: 50%;
@@ -55,23 +55,6 @@
 
         #main-content { flex: 1; display: flex; position: relative; background: #fff; height: 100%; }
         iframe { width: 100%; height: 100%; border: none; background: #ffffff; }
-
-        #block-screen { display: none; position: absolute; inset: 0; background: rgba(11, 15, 25, 0.98); z-index: 90; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 2rem; }
-        #block-screen h1 { color: var(--danger); font-size: 2.5rem; margin-bottom: 1rem; }
-
-        #admin-panel { display: none; width: 350px; background: var(--bg-card); border-left: 1px solid #24324d; flex-direction: column; padding: 1.5rem; z-index: 70; }
-        #admin-panel h3 { font-size: 1.2rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
-        .user-card { background: var(--bg-main); padding: 1rem; border-radius: 10px; margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center; }
-        
-        .btn-sm { width: auto; padding: 0.4rem 0.75rem; margin: 0; font-size: 0.8rem; border-radius: 6px; }
-        .btn-danger { background: var(--danger); color: white; }
-        .btn-success { background: var(--success); color: white; }
-        .btn-secondary { background: var(--bg-input); color: var(--text); border: 1px solid #334155; }
-        
-        #chat-monitor { width: 100%; height: 250px; background: #05070c; margin-top: auto; border-radius: 10px; border: 1px solid #24324d; display: flex; flex-direction: column; padding: 0.5rem; }
-        #chat-logs { flex: 1; overflow-y: auto; font-size: 0.85rem; padding: 0.25rem; margin-bottom: 0.5rem; display: flex; flex-direction: column; gap: 4px; }
-        
-        #user-chat-box { display: none; position: fixed; bottom: 20px; right: 20px; width: 300px; background: var(--bg-card); border: 1px solid var(--accent); border-radius: 12px; padding: 1rem; z-index: 95; box-shadow: 0 10px 25px rgba(0,0,0,0.4); }
     </style>
 </head>
 <body>
@@ -95,91 +78,41 @@
             <input type="text" id="nav-url-input" placeholder="Cambiar URL...">
             <button onclick="changeUrlFromNav()">Ir</button>
         </div>
-        <div style="color: var(--text-muted); font-size: 0.8rem; white-space: nowrap;" id="status-text">🟢 Activo</div>
     </header>
 
     <div style="display: flex; flex: 1; height: 100%;">
         <div id="main-content">
             <iframe id="web-frame" src="about:blank"></iframe>
-            <div id="block-screen">
-                <h1>🔒 ACCESO RESTRINGIDO</h1>
-                <p id="block-message">Esta web está bloqueada temporalmente.</p>
-            </div>
-        </div>
-
-        <div id="admin-panel">
-            <h3>🛡️ Panel de Control</h3>
-            <button id="global-lock-btn" class="btn-danger" style="margin-bottom:1.5rem;" onclick="toggleGlobalBlock()">Bloquear Web Global</button>
-            <h4 style="font-size: 0.9rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.5rem;">Usuarios Activos</h4>
-            <div id="users-list" style="flex: 1; overflow-y: auto; margin-bottom: 1rem;"></div>
-            
-            <h4 id="chat-title" style="font-size: 0.9rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.5rem;">Chat Directo (Nadie Selecc.)</h4>
-            <div id="chat-monitor">
-                <div id="chat-logs"></div>
-                <div style="display: flex; gap: 4px;">
-                    <input type="text" id="admin-chat-input" placeholder="Escribe un mensaje..." style="margin:0; padding: 0.4rem; font-size:0.85rem;" disabled>
-                    <button onclick="sendAdminMessage()" class="btn-sm" style="padding:0 0.75rem; border-radius:8px;">💬</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="user-chat-box">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <h4 style="font-size:0.9rem; color:var(--accent); margin: 0;">💬 Mensaje del Admin</h4>
-            <button onclick="document.getElementById('user-chat-box').style.display = 'none'" style="width: auto; background: transparent; color: var(--text-muted); border: none; font-size: 1rem; cursor: pointer; padding: 0 4px;" onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--text-muted)'">✕</button>
-        </div>
-        <div id="user-chat-logs" style="font-size:0.85rem; max-height:100px; overflow-y:auto; margin-bottom:8px; color:#fff;"></div>
-        <div style="display:flex; gap:4px;">
-            <input type="text" id="user-reply-input" placeholder="Responder..." style="margin:0; padding:0.4rem; font-size:0.85rem;">
-            <button onclick="sendUserReply()" class="btn-sm" style="padding:0 0.6rem; border-radius:8px;">Enviar</button>
         </div>
     </div>
 
     <script>
-        const socket = io();
-        let isGlobalBlocked = false;
         let navVisible = false;
         let userNickname = "";
-        let isAdminMode = false;
-        let selectedUserId = null;
-        let currentAdminIdForUser = null; 
 
         function connect() {
-            try {
-                userNickname = document.getElementById('nickname-input').value.trim();
-                let url = document.getElementById('url-input').value.trim();
+            userNickname = document.getElementById('nickname-input').value.trim();
+            let url = document.getElementById('url-input').value.trim();
 
-                if (!userNickname || !url) {
-                    alert("Por favor, rellena todos los campos.");
-                    return;
-                }
-
-                if (!/^https?:\/\//i.test(url)) { url = 'https://' + url; }
-
-                document.getElementById('nav-url-input').value = url;
-                document.getElementById('login-screen').style.opacity = '0';
-                setTimeout(() => document.getElementById('login-screen').style.display = 'none', 300);
-                
-                document.getElementById('toggle-nav-btn').style.display = 'flex';
-                document.getElementById('user-display').innerText = userNickname;
-                
-                if(userNickname === "Admin777") {
-                    isAdminMode = true;
-                    document.getElementById('web-frame').src = "about:blank"; 
-                    document.getElementById('nav-url-input').value = "Panel Admin Activo";
-                } else {
-                    document.getElementById('web-frame').src = url;
-                }
-
-                socket.emit('register', { nickname: userNickname, url });
-            } catch (err) {
-                console.error(err);
+            if (!userNickname || !url) {
+                alert("Por favor, rellena todos los campos.");
+                return;
             }
+
+            // Asegurar el protocolo https
+            if (!/^https?:\/\//i.test(url)) { url = 'https://' + url; }
+
+            document.getElementById('nav-url-input').value = url;
+            document.getElementById('login-screen').style.opacity = '0';
+            setTimeout(() => document.getElementById('login-screen').style.display = 'none', 300);
+            
+            document.getElementById('toggle-nav-btn').style.display = 'flex';
+            document.getElementById('user-display').innerText = userNickname;
+            
+            document.getElementById('web-frame').src = url;
         }
 
         function changeUrlFromNav() {
-            if(isAdminMode) return alert("Eres el administrador, no necesitas cargar un iframe aquí.");
             let newUrl = document.getElementById('nav-url-input').value.trim();
             if (!newUrl) return alert("Escribe una URL válida");
 
@@ -187,8 +120,6 @@
             
             document.getElementById('nav-url-input').value = newUrl;
             document.getElementById('web-frame').src = newUrl;
-
-            socket.emit('register', { nickname: userNickname, url: newUrl });
             toggleNav();
         }
 
@@ -196,116 +127,6 @@
             const nav = document.getElementById('floating-nav');
             navVisible = !navVisible;
             nav.classList.toggle('show', navVisible);
-        }
-
-        socket.on('admin-granted', (data) => {
-            document.getElementById('admin-panel').style.display = 'flex';
-            isGlobalBlocked = data.globalWebBlocked;
-            updateAdminBtnUI();
-            renderUsers(data.users);
-        });
-
-        socket.on('update-users', (usersList) => {
-            if (document.getElementById('admin-panel').style.display === 'flex') {
-                renderUsers(usersList);
-            }
-        });
-
-        socket.on('force-block', (message) => {
-            document.getElementById('block-message').innerText = message;
-            document.getElementById('block-screen').style.display = 'flex';
-        });
-
-        socket.on('force-unblock', () => {
-            document.getElementById('block-screen').style.display = 'none';
-        });
-
-        socket.on('receive-message', ({ from, fromId, message }) => {
-            currentAdminIdForUser = fromId;
-            document.getElementById('user-chat-box').style.display = 'block';
-            const logs = document.getElementById('user-chat-logs');
-            logs.innerHTML += `<div><strong>${from}:</strong> ${message}</div>`;
-            logs.scrollTop = logs.scrollHeight;
-        });
-
-        socket.on('receive-reply', ({ from, fromId, message }) => {
-            if(selectedUserId === fromId) {
-                const logs = document.getElementById('chat-logs');
-                logs.innerHTML += `<div><span style="color:var(--accent)">${from}:</span> ${message}</div>`;
-                logs.scrollTop = logs.scrollHeight;
-            }
-        });
-
-        function selectUserChat(targetId, nickname) {
-            selectedUserId = targetId;
-            document.getElementById('chat-title').innerText = `Chat con: ${nickname}`;
-            document.getElementById('admin-chat-input').disabled = false;
-            document.getElementById('chat-logs').innerHTML = `<div style="color:var(--text-muted); font-size:11px; text-align:center;">Canal abierto con ${nickname}</div>`;
-        }
-
-        function sendAdminMessage() {
-            const input = document.getElementById('admin-chat-input');
-            const message = input.value.trim();
-            if(!message || !selectedUserId) return;
-
-            socket.emit('send-message', { targetId: selectedUserId, message });
-            
-            const logs = document.getElementById('chat-logs');
-            logs.innerHTML += `<div><span style="color:#fff">Tú:</span> ${message}</div>`;
-            logs.scrollTop = logs.scrollHeight;
-            input.value = '';
-        }
-
-        function sendUserReply() {
-            const input = document.getElementById('user-reply-input');
-            const message = input.value.trim();
-            if(!message || !currentAdminIdForUser) return;
-
-            socket.emit('reply-message', { adminId: currentAdminIdForUser, message });
-            
-            const logs = document.getElementById('user-chat-logs');
-            logs.innerHTML += `<div><span style="color:var(--text-muted)">Tú:</span> ${message}</div>`;
-            logs.scrollTop = logs.scrollHeight;
-            input.value = '';
-        }
-
-        function renderUsers(users) {
-            const container = document.getElementById('users-list');
-            container.innerHTML = '';
-            users.forEach(u => {
-                if (u.id === socket.id) return;
-                const card = document.createElement('div');
-                card.className = 'user-card';
-                card.innerHTML = `
-                    <div>
-                        <strong style="font-size:0.95rem;">${u.nickname}</strong><br>
-                        <small style="color:var(--text-muted); font-size:11px;">${u.url.substring(0,25)}...</small>
-                    </div>
-                    <div style="display:flex; gap:6px;">
-                        <button class="btn-sm btn-secondary" onclick="selectUserChat('${u.id}', '${u.nickname}')" title="Enviar Mensaje">💬</button>
-                        <button class="btn-sm ${u.blocked ? 'btn-success' : 'btn-danger'}" onclick="toggleUserBlock('${u.id}', ${!u.blocked})">
-                            ${u.blocked ? 'Alta' : 'Block'}
-                        </button>
-                    </div>
-                `;
-                container.appendChild(card);
-            });
-        }
-
-        function toggleGlobalBlock() {
-            isGlobalBlocked = !isGlobalBlocked;
-            socket.emit('toggle-global-block', isGlobalBlocked);
-            updateAdminBtnUI();
-        }
-
-        function updateAdminBtnUI() {
-            const btn = document.getElementById('global-lock-btn');
-            btn.innerText = isGlobalBlocked ? "Desbloquear Web Global" : "Bloquear Web Global";
-            btn.className = isGlobalBlocked ? "btn-success" : "btn-danger";
-        }
-
-        function toggleUserBlock(targetId, blockStatus) {
-            socket.emit('toggle-user-block', { targetId, blockStatus });
         }
     </script>
 </body>
